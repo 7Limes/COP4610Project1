@@ -1,9 +1,61 @@
+#define _POSIX_C_SOURCE 200112L  // Allows usage of setenv
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include "lexer.h"
+
+#define HISTORY_SIZE 3
+static char *history[HISTORY_SIZE];
+static int history_count = 0;
+
+#define MAX_JOBS 64
+typedef struct {
+    int job_num;
+    pid_t pid;
+    char cmdline[200];
+} job_t;
+
+static job_t jobs[MAX_JOBS];
+static int num_jobs = 0;
+static int next_job_num = 1;
+
+
+void add_to_history(const char *cmd) {
+    if (history_count == HISTORY_SIZE) {
+        free(history[0]);
+        memmove(history, history + 1, (HISTORY_SIZE - 1) * sizeof(char *));
+        history[HISTORY_SIZE - 1] = malloc(strlen(cmd) + 1);
+        strcpy(history[HISTORY_SIZE - 1], cmd);
+    } else {
+        history[history_count] = malloc(strlen(cmd) + 1);
+        strcpy(history[history_count], cmd);
+        history_count++;
+    }
+}
+
+void add_job(pid_t pid, const char *cmdline) {
+    if (num_jobs >= MAX_JOBS) return;
+    jobs[num_jobs].job_num = next_job_num++;
+    jobs[num_jobs].pid = pid;
+    strncpy(jobs[num_jobs].cmdline, cmdline, sizeof(jobs[num_jobs].cmdline) - 1);
+    jobs[num_jobs].cmdline[sizeof(jobs[num_jobs].cmdline) - 1] = '\0';
+    num_jobs++;
+}
+
+// Remove finished background jobs without blocking.
+void reap_jobs(void) {
+    for (int i = 0; i < num_jobs; i++) {
+        if (waitpid(jobs[i].pid, NULL, WNOHANG) > 0) {
+            // shift remaining jobs down
+            memmove(&jobs[i], &jobs[i + 1], (num_jobs - i - 1) * sizeof(job_t));
+            num_jobs--;
+            i--;
+        }
+    }
+}
 
 // part 1
 void print_prompt() {
@@ -100,22 +152,110 @@ void resolve_path(tokenlist *tokens) {
     
     free(path_copy);
 }
+
 // part 5
-void execute_command(tokenlist *tokens) {
+// Returns 1 if the command should run in the background (last token was '&').
+static int check_background(tokenlist *tokens) {
+    if (tokens->size > 0 && strcmp(tokens->items[tokens->size - 1], "&") == 0) {
+        free(tokens->items[tokens->size - 1]);
+        tokens->items[tokens->size - 1] = NULL;
+        tokens->size--;
+        return 1;
+    }
+    return 0;
+}
+
+void execute_command(tokenlist *tokens, const char *raw_input) {
+    if (tokens->size == 0 || tokens->items[0][0] == '\0') return;
+
+    int background = check_background(tokens);
     if (tokens->size == 0 || tokens->items[0][0] == '\0') return;
 
     pid_t pid = fork();
     if (pid == -1) {
         perror("fork failed");
     } else if (pid == 0) {
-        // execv must take the absolute path which is now stored inside tokens->items[0] 
         execv(tokens->items[0], tokens->items);
         perror("execv failed");
         exit(1);
     } else {
-        waitpid(pid, NULL, 0);
+        if (background) {
+            add_job(pid, raw_input);
+        } else {
+            waitpid(pid, NULL, 0);
+        }
     }
 }
+
+// Internal cd command
+void builtin_cd(tokenlist *tokens) {
+    char *target;
+    if (tokens->size == 1) {
+        target = getenv("HOME");
+        if (!target) {
+            fprintf(stderr, "cd: HOME not set\n");
+            return;
+        }
+    } else if (tokens->size > 2) {
+        fprintf(stderr, "cd: too many arguments\n");
+        return;
+    } else {
+        target = tokens->items[1];
+    }
+
+    struct stat st;
+    if (stat(target, &st) != 0) {
+        fprintf(stderr, "cd: %s: No such file or directory\n", target);
+        return;
+    }
+    if (!S_ISDIR(st.st_mode)) {
+        fprintf(stderr, "cd: %s: Not a directory\n", target);
+        return;
+    }
+    if (chdir(target) != 0) {
+        perror("cd");
+        return;
+    }
+
+    // Update pwd
+    char cwd[4096];
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        setenv("PWD", cwd, 1);
+    }
+}
+
+// Internal jobs command
+void builtin_jobs(void) {
+    reap_jobs();
+    if (num_jobs == 0) {
+        printf("No active background processes\n");
+        return;
+    }
+    for (int i = 0; i < num_jobs; i++) {
+        printf("[%d]+ %d %s\n", jobs[i].job_num, jobs[i].pid, jobs[i].cmdline);
+    }
+}
+
+// Internal exit command
+void builtin_exit(void) {
+    // Wait for remaining jobs to finish
+    for (int i = 0; i < num_jobs; i++) {
+        waitpid(jobs[i].pid, NULL, 0);
+    }
+
+    if (history_count == 0) {
+        printf("No commands in history\n");
+    } else {
+        int count = history_count < HISTORY_SIZE ? history_count : HISTORY_SIZE;
+        int display = count < 3 ? 1 : 3;
+        for (int i = count - display; i < count; i++) {
+            printf("%s\n", history[i]);
+        }
+    }
+
+    exit(0);
+}
+
 int main() {
     while (1) {
         print_prompt();
@@ -139,13 +279,38 @@ int main() {
         // tokenizes raw input
         tokenlist *tokens = get_tokens(input);
 
-        // expands special characters
-        expand_env_vars(tokens);
-        expand_tilde(tokens);
-        resolve_path(tokens);
-        
-        // Finds executables and runs it
-        execute_command(tokens);
+        if (tokens->size == 0) {
+            free(input);
+            free_tokens(tokens);
+            continue;
+        }
+
+        // handle internal commands
+        if (strcmp(tokens->items[0], "exit") == 0) {
+            add_to_history(input);
+            free(input);
+            free_tokens(tokens);
+            builtin_exit();
+        } else if (strcmp(tokens->items[0], "cd") == 0) {
+            add_to_history(input);
+            builtin_cd(tokens);
+        } else if (strcmp(tokens->items[0], "jobs") == 0) {
+            add_to_history(input);
+            builtin_jobs();
+        } else {
+            // expands special characters
+            expand_env_vars(tokens);
+            expand_tilde(tokens);
+            resolve_path(tokens);
+
+            // only add to history if command was found
+            if (tokens->items[0][0] != '\0') {
+                add_to_history(input);
+            }
+
+            // Finds executables and runs it
+            execute_command(tokens, input);
+        }
 
         // cleans up memory
         free(input);
