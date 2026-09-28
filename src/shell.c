@@ -61,6 +61,13 @@ void reap_jobs(void) {
 void print_prompt() {
     char *user = getenv("USER");
     char *machine = getenv("MACHINE");
+    char hostname[256];
+    if (!machine) {
+        if (gethostname(hostname, sizeof(hostname)) == 0)
+            machine = hostname;
+        else
+            machine = "machine";
+    }
     char *pwd = getenv("PWD");
     if (!user) user = "user";
     if (!machine) machine = "machine";
