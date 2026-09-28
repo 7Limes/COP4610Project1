@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include "lexer.h"
@@ -162,12 +163,43 @@ void resolve_path(tokenlist *tokens) {
 
 // part 5
 // Returns 1 if the command should run in the background (last token was '&').
-static int check_background(tokenlist *tokens) {
+int check_background(tokenlist *tokens) {
     if (tokens->size > 0 && strcmp(tokens->items[tokens->size - 1], "&") == 0) {
         free(tokens->items[tokens->size - 1]);
         tokens->items[tokens->size - 1] = NULL;
         tokens->size--;
         return 1;
+    }
+    return 0;
+}
+
+// Scans tokens for < and >, removes them and their filename arguments,
+// and returns the filenames via file_in/file_out. Gives ownership to caller.
+int parse_redirections(tokenlist *tokens, char **file_in, char **file_out) {
+    *file_in = NULL;
+    *file_out = NULL;
+
+    for (int i = 0; i < (int)tokens->size; i++) {
+        if (strcmp(tokens->items[i], ">") == 0 || strcmp(tokens->items[i], "<") == 0) {
+            int is_out = (tokens->items[i][0] == '>');
+            if (i + 1 >= (int)tokens->size) {
+                fprintf(stderr, "syntax error: expected filename after '%c'\n", tokens->items[i][0]);
+                return -1;
+            }
+            char *fname = malloc(strlen(tokens->items[i + 1]) + 1);
+            strcpy(fname, tokens->items[i + 1]);
+            free(tokens->items[i]);
+            free(tokens->items[i + 1]);
+            memmove(&tokens->items[i], &tokens->items[i + 2],
+                    (tokens->size - i - 2) * sizeof(char *));
+            tokens->size -= 2;
+            tokens->items[tokens->size] = NULL;
+            i--;
+            if (is_out)
+                *file_out = fname;
+            else
+                *file_in = fname;
+        }
     }
     return 0;
 }
@@ -178,10 +210,43 @@ void execute_command(tokenlist *tokens, const char *raw_input) {
     int background = check_background(tokens);
     if (tokens->size == 0 || tokens->items[0][0] == '\0') return;
 
+    char *file_in = NULL, *file_out = NULL;
+    if (parse_redirections(tokens, &file_in, &file_out) != 0) {
+        free(file_in);
+        free(file_out);
+        return;
+    }
+    if (tokens->size == 0 || tokens->items[0][0] == '\0') {
+        free(file_in);
+        free(file_out);
+        return;
+    }
+
     pid_t pid = fork();
     if (pid == -1) {
         perror("fork failed");
     } else if (pid == 0) {
+        if (file_out) {
+            int fd = open(file_out, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            if (fd == -1) { perror(file_out); exit(1); }
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+        }
+        if (file_in) {
+            struct stat st;
+            if (stat(file_in, &st) != 0) {
+                fprintf(stderr, "%s: No such file or directory\n", file_in);
+                exit(1);
+            }
+            if (!S_ISREG(st.st_mode)) {
+                fprintf(stderr, "%s: Not a regular file\n", file_in);
+                exit(1);
+            }
+            int fd = open(file_in, O_RDONLY);
+            if (fd == -1) { perror(file_in); exit(1); }
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+        }
         execv(tokens->items[0], tokens->items);
         perror("execv failed");
         exit(1);
@@ -192,6 +257,9 @@ void execute_command(tokenlist *tokens, const char *raw_input) {
             waitpid(pid, NULL, 0);
         }
     }
+
+    free(file_in);
+    free(file_out);
 }
 
 // Internal cd command
