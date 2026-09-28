@@ -124,11 +124,16 @@ int main() {
         char *input = get_input();
 
         // EOF (Ctrl+D) to exit the program
-        char *input = get_input();
-        if (input == NULL || strlen(input) == 0) {
+        if (input == NULL || feof(stdin)) {
             if (input) free(input);
             printf("\n");
             break; 
+        }
+
+        // Entering an empty prompt shows print_prompt again
+        if (strlen(input) == 0) {
+            free(input);
+            continue;
         }
 
         // tokenizes raw input
