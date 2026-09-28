@@ -1,6 +1,3 @@
-// Needed to add this #definebecause the Makefile uses C99 and I wanted to change the least amount of code possible outside of this script.
-#define _POSIX_C_SOURCE 200809L
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,56 +54,68 @@ void expand_tilde(tokenlist *tokens) {
 }
 
 // part 4
-char* resolve_path(char *cmd) {
-    if (strchr(cmd, '/') != NULL) {
-        if (access(cmd, X_OK) == 0) {
-            return strdup(cmd);
-        }
-        return NULL;
-    }
-    char *path_env = getenv("PATH");
-    if (!path_env) return NULL;
+void resolve_path(tokenlist *tokens) {
+    if (tokens->size == 0 || tokens->items[0][0] == '\0') return;
+    
+    char *cmd = tokens->items[0];
 
-    char *path_copy = strdup(path_env);
+    // If the command is an absolute or relative path, check F_OK as required by slides
+    if (strchr(cmd, '/') != NULL) {
+        if (access(cmd, F_OK) != 0) {
+            printf("Command not found: %s\n", cmd);
+        }
+        return; 
+    }
+    
+    char *path_env = getenv("PATH");
+    if (!path_env) return;
+ 
+    char *path_copy = malloc(strlen(path_env) + 1);
+    strcpy(path_copy, path_env);
+    
     char *dir = strtok(path_copy, ":");
     char buffer[4096];
+    int found = 0;
 
     while (dir != NULL) {
         snprintf(buffer, sizeof(buffer), "%s/%s", dir, cmd);
-        if (access(buffer, X_OK) == 0) {
-            free(path_copy);
-            return strdup(buffer);
+        
+        if (access(buffer, F_OK) == 0) {
+            found = 1; 
+            free(tokens->items[0]);
+            tokens->items[0] = malloc(strlen(buffer) + 1);
+            strcpy(tokens->items[0], buffer);
+            break;
         }
         dir = strtok(NULL, ":");
     }
+    
+    if (!found) {
+        printf("Command not found: %s\n", cmd);
+        // Clear the token so we don't try to execute it
+        free(tokens->items[0]);
+        tokens->items[0] = malloc(1);
+        tokens->items[0][0] = '\0';
+    }
+    
     free(path_copy);
-    return NULL;
 }
-
 // part 5
 void execute_command(tokenlist *tokens) {
     if (tokens->size == 0 || tokens->items[0][0] == '\0') return;
-
-    char *cmd_path = resolve_path(tokens->items[0]);
-    if (!cmd_path) {
-        printf("Command not found: %s\n", tokens->items[0]);
-        return;
-    }
 
     pid_t pid = fork();
     if (pid == -1) {
         perror("fork failed");
     } else if (pid == 0) {
-        execv(cmd_path, tokens->items);
+        // execv must take the absolute path which is now stored inside tokens->items[0] 
+        execv(tokens->items[0], tokens->items);
         perror("execv failed");
         exit(1);
     } else {
         waitpid(pid, NULL, 0);
     }
-
-    free(cmd_path);
 }
-
 int main() {
     while (1) {
         print_prompt();
@@ -115,6 +124,7 @@ int main() {
         char *input = get_input();
 
         // EOF (Ctrl+D) to exit the program
+        char *input = get_input();
         if (input == NULL || strlen(input) == 0) {
             if (input) free(input);
             printf("\n");
@@ -127,6 +137,7 @@ int main() {
         // expands special characters
         expand_env_vars(tokens);
         expand_tilde(tokens);
+        resolve_path(tokens);
         
         // Finds executables and runs it
         execute_command(tokens);
