@@ -1,67 +1,64 @@
 # Shell
 
-[Description]
+An implementation of a simple shell.
 
 ## Group Members
-- **John Doe**: jd19@fsu.edu
-- **Jane Smith**: js19@fsu.edu
-- **Alex Brown**: ab19@fsu.edu
+- **Miles Burkart**: mjb23b@fsu.edu
+- **Chamee Nernginn**: cn24a@fsu.edu
+- **Cole Dunlop**: cjd21d@fsu.edu
+
 ## Division of Labor
 
 ### Part 1: Prompt
-- **Responsibilities**: [Description]
-- **Assigned to**: John Doe
+- **Responsibilities**: Print the prompt, including the username and machine name
+- **Assigned to**: Cole, Chamee
 
 ### Part 2: Environment Variables
-- **Responsibilities**: [Description]
-- **Assigned to**: Jane Smith
+- **Responsibilities**: Allow the usage of environment variables in command args
+- **Assigned to**: Chamee
 
 ### Part 3: Tilde Expansion
-- **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown
+- **Responsibilities**: Expand tildes into the user's home directory
+- **Assigned to**: Chamee
 
 ### Part 4: $PATH Search
-- **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, Jane Smith
+- **Responsibilities**: Search the $PATH for external executables
+- **Assigned to**: Chamee, Cole
 
 ### Part 5: External Command Execution
-- **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, Jane Smith
+- **Responsibilities**: Allow executing external commands from within the shell
+- **Assigned to**: Miles, Chamee
 
 ### Part 6: I/O Redirection
-- **Responsibilities**: [Description]
-- **Assigned to**: Jane Smith
+- **Responsibilities**: Implement `<` and `>` redirection operators
+- **Assigned to**: Miles, Cole
 
 ### Part 7: Piping
-- **Responsibilities**: [Description]
-- **Assigned to**: John Doe
+- **Responsibilities**: Use `|` to pipe output of one command into another command
+- **Assigned to**: Miles, Cole
 
 ### Part 8: Background Processing
-- **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, John Doe
+- **Responsibilities**: Create a background job if a command ends with `&`
+- **Assigned to**: Miles, Cole
 
 ### Part 9: Internal Command Execution
-- **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown
-
-### Part 10: External Timeout Executable
-- **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, Jane Smith
+- **Responsibilities**: Implement `cd`, `jobs`, and `exit` commands
+- **Assigned to**: Cole, Miles
 
 ### Extra Credit
-- **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown
+- **Responsibilities**: Unlimited number of pipes, piping and I/O redirection in a single command, execute shell within itself
+- **Assigned to**: Miles
 
 ## File Listing
 ```
 shell/
 │
 ├── src/
-│ ├── main.c
+│ ├── lexer.c
 │ └── shell.c
 │
 ├── include/
-│ └── shell.h
+│ └── lexer.h
 │
 ├── README.md
 └── Makefile
@@ -69,48 +66,35 @@ shell/
 ## How to Compile & Execute
 
 ### Requirements
-- **Compiler**: e.g., `gcc` for C/C++, `rustc` for Rust.
-- **Dependencies**: List any libraries or frameworks necessary (rust only).
+- **Compiler**: `gcc`
 
 ### Compilation
-For a C/C++ example:
 ```bash
 make
 ```
-This will build the executable in ...
+This will build the executable in `bin`.
 ### Execution
 ```bash
 make run
 ```
-This will run the program ...
+This will run the program.
 
 ## Development Log
 Each member records their contributions here.
 
-### [Member 1]
+### Miles
 
 | Date       | Work Completed / Notes |
 |------------|------------------------|
-| YYYY-MM-DD | [Description of task]  |
-| YYYY-MM-DD | [Description of task]  |
-| YYYY-MM-DD | [Description of task]  |
+| 2026-09-13 | Created the repository |
+| 2026-09-28 | Implemented piping and I/O redirection |
 
-### [Member 2]
-
-| Date       | Work Completed / Notes |
-|------------|------------------------|
-| YYYY-MM-DD | [Description of task]  |
-| YYYY-MM-DD | [Description of task]  |
-| YYYY-MM-DD | [Description of task]  |
-
-
-### [Member 3]
+### Chamee
 
 | Date       | Work Completed / Notes |
 |------------|------------------------|
-| YYYY-MM-DD | [Description of task]  |
-| YYYY-MM-DD | [Description of task]  |
-| YYYY-MM-DD | [Description of task]  |
+| 2026-09-26 | Organized project files |
+| 2026-09-27 | Completed parts 1-5    |
 
 
 ## Meetings
@@ -118,20 +102,6 @@ Document in-person meetings, their purpose, and what was discussed.
 
 | Date       | Attendees            | Topics Discussed | Outcomes / Decisions |
 |------------|----------------------|------------------|-----------------------|
-| YYYY-MM-DD | [Names]              | [Agenda items]   | [Actions/Next steps]  |
-| YYYY-MM-DD | [Names]              | [Agenda items]   | [Actions/Next steps]  |
+| 2026-09-10 | Miles, Chamee, Cole  | Responsibilities | Create repository     |
+| 2026-09-24 | Miles, Chamee        | Implementation details | Start implementation |
 
-
-
-## Bugs
-- **Bug 1**: This is bug 1.
-- **Bug 2**: This is bug 2.
-- **Bug 3**: This is bug 3.
-
-## Extra Credit
-- **Extra Credit 1**: [Extra Credit Option]
-- **Extra Credit 2**: [Extra Credit Option]
-- **Extra Credit 3**: [Extra Credit Option]
-
-## Considerations
-[Description]
